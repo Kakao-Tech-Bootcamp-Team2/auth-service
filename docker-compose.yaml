@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   auth-service:
     build: .
@@ -11,85 +9,26 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5001
-      - MONGODB_URI=mongodb://mongodb:27017/auth_service
-      - REDIS_HOST=redis
+      - MONGODB_URI=mongodb://shared-mongodb:27017/auth_service
+      - REDIS_HOST=shared-redis
       - REDIS_PORT=6379
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=24h
-      - RABBITMQ_URL=amqp://rabbitmq:5672
-    depends_on:
-      - mongodb
-      - redis
-      - rabbitmq
-    networks:
-      - auth-network
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@shared-rabbitmq:5672/${RABBITMQ_VHOST}
     volumes:
       - ./logs:/usr/src/app/logs
+    networks:
+      - auth-network
+      - shared-infrastructure
     healthcheck:
       test: ["CMD", "wget", "--spider", "http://localhost:5001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  mongodb:
-    image: mongo:6
-    container_name: auth-mongodb
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - auth-network
-    command: ["--replSet", "rs0", "--bind_ip_all"]
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  redis:
-    image: redis:7-alpine
-    container_name: auth-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - auth-network
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: auth-rabbitmq
-    restart: unless-stopped
-    ports:
-      - "5672:5672"   # AMQP protocol port
-      - "15672:15672" # Management UI port
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS}
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - auth-network
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-volumes:
-  mongodb_data:
-  redis_data:
-  rabbitmq_data:
-
 networks:
   auth-network:
     driver: bridge
+  shared-infrastructure:
+    external: true
+    name: shared-infrastructure
