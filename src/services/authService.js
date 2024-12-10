@@ -3,6 +3,7 @@ const { User, Session } = require('../models');
 const redisClient = require('../utils/redisClient');
 const logger = require('../utils/logger');
 const config = require('../config');
+const userService = require('./userService');
 const { 
     AuthenticationError, 
     ValidationError, 
@@ -57,6 +58,9 @@ class AuthService {
         // 토큰 생성
         const accessToken = this.generateAccessToken(user);
         const refreshToken = this.generateRefreshToken(user);
+
+        // 기존 세션 로그아웃 처리
+        await userService.logoutOtherSessions(user._id);
 
         // 세션 생성
         const session = await Session.create({

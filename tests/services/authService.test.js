@@ -1,81 +1,102 @@
 const authService = require('../../src/services/authService');
 const { User, Session } = require('../../src/models');
-const { AuthenticationError } = require('../../src/utils/errors');
+const redisClient = require('../../src/utils/redisClient');
+const { AuthenticationError, ValidationError } = require('../../src/utils/errors');
 
 describe('AuthService', () => {
-  // 각 테스트 전에 데이터베이스 초기화
-  beforeEach(async () => {
-    await User.deleteMany({});
-    await Session.deleteMany({});
-  });
-
-  describe('register', () => {
-    it('should register a new user successfully', async () => {
-      const userData = {
-        email: 'test@example.com',
-        password: 'password123',
-        name: 'Test User'
-      };
-
-      const user = await authService.register(userData);
-
-      expect(user.email).toBe(userData.email);
-      expect(user.name).toBe(userData.name);
-      expect(user.password).not.toBe(userData.password);
-    });
-
-    it('should throw ValidationError if email already exists', async () => {
-      const userData = {
-        email: 'test@example.com',
-        password: 'password123',
-        name: 'Test User'
-      };
-
-      await authService.register(userData);
-      await expect(authService.register(userData)).rejects.toThrow();
-    });
-  });
-
-  describe('login', () => {
-    let registeredUser;
-
     beforeEach(async () => {
-      const userData = {
-        email: 'test@example.com',
-        password: 'password123',
-        name: 'Test User'
-      };
-      registeredUser = await authService.register(userData);
+        await User.deleteMany({});
+        await Session.deleteMany({});
+        jest.clearAllMocks();
     });
 
-    it('should login user successfully', async () => {
-      const result = await authService.login({
-        email: registeredUser.email,
-        password: 'password123',
-        userAgent: 'test-agent',
-        clientIp: '127.0.0.1'
-      });
+    describe('register', () => {
+        const validUserData = {
+            email: 'test@example.com',
+            password: 'password123',
+            name: 'Test User'
+        };
 
-      expect(result.user.email).toBe(registeredUser.email);
-      expect(result.accessToken).toBeDefined();
-      expect(result.refreshToken).toBeDefined();
+        it('should register a new user successfully', async () => {
+            const user = await authService.register(validUserData);
+
+            expect(user.email).toBe(validUserData.email);
+            expect(user.name).toBe(validUserData.name);
+            expect(user.password).not.toBe(validUserData.password);
+            expect(user.status).toBe('active');
+        });
+
+        it('should throw ValidationError for duplicate email', async () => {
+            await authService.register(validUserData);
+            await expect(authService.register(validUserData))
+                .rejects
+                .toThrow(ValidationError);
+        });
     });
 
-    it('should throw AuthenticationError for wrong password', async () => {
-      await expect(
-        authService.login({
-          email: registeredUser.email,
-          password: 'wrongpassword',
-          userAgent: 'test-agent',
-          clientIp: '127.0.0.1'
-        })
-      ).rejects.toThrow(AuthenticationError);
-    });
-  });
+    describe('login', () => {
+        const userData = {
+            email: 'test@example.com',
+            password: 'password123',
+            name: 'Test User'
+        };
 
-  // 테스트가 끝난 후 데이터베이스 정리
-  afterAll(async () => {
-    await User.deleteMany({});
-    await Session.deleteMany({});
-  });
+        beforeEach(async () => {
+            await authService.register(userData);
+        });
+
+        it('should login successfully and return tokens', async () => {
+            const result = await authService.login({
+                email: userData.email,
+                password: userData.password,
+                userAgent: 'test-agent',
+                clientIp: '127.0.0.1'
+            });
+
+            expect(result.user.email).toBe(userData.email);
+            expect(result.accessToken).toBeDefined();
+            expect(result.refreshToken).toBeDefined();
+            expect(result.sessionId).toBeDefined();
+            expect(redisClient.setex).toHaveBeenCalled();
+        });
+
+        it('should throw AuthenticationError for wrong password', async () => {
+            await expect(authService.login({
+                email: userData.email,
+                password: 'wrongpassword',
+                userAgent: 'test-agent',
+                clientIp: '127.0.0.1'
+            })).rejects.toThrow(AuthenticationError);
+        });
+    });
+
+    describe('logout', () => {
+        let user;
+        let session;
+
+        beforeEach(async () => {
+            user = await authService.register({
+                email: 'test@example.com',
+                password: 'password123',
+                name: 'Test User'
+            });
+
+            const loginResult = await authService.login({
+                email: 'test@example.com',
+                password: 'password123',
+                userAgent: 'test-agent',
+                clientIp: '127.0.0.1'
+            });
+
+            session = await Session.findById(loginResult.sessionId);
+        });
+
+        it('should logout successfully', async () => {
+            await authService.logout(user._id, session._id);
+
+            const updatedSession = await Session.findById(session._id);
+            expect(updatedSession.isValid).toBe(false);
+            expect(redisClient.del).toHaveBeenCalledWith(`session:${user._id}:${session._id}`);
+        });
+    });
 });

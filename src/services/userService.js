@@ -1,18 +1,25 @@
 const { User, Session } = require('../models');
 const redisClient = require('../utils/redisClient');
 const logger = require('../utils/logger');
-const { 
-    ValidationError, 
-    NotFoundError, 
-    AuthenticationError 
-} = require('../utils/errors');
+const { ValidationError, NotFoundError, AuthenticationError } = require('../utils/errors');
+const config = require('../config');
 
 class UserService {
+    /**
+     * 프로필 조회
+     */
+    async getProfile(userId) {
+        const user = await User.findById(userId).select('-password');
+        if (!user) {
+            throw new NotFoundError('User not found');
+        }
+        return user;
+    }
+
     /**
      * 프로필 수정
      */
     async updateProfile(userId, updateData) {
-        // 수정 가능한 필드 필터링
         const allowedUpdates = ['name', 'email'];
         const updates = Object.keys(updateData)
             .filter(key => allowedUpdates.includes(key))
@@ -27,7 +34,7 @@ class UserService {
                 _id: { $ne: userId } 
             });
             if (existingUser) {
-                throw new ValidationError('이미 사용 중인 이메일입니다.');
+                throw new ValidationError('Email already in use');
             }
         }
 
@@ -35,10 +42,10 @@ class UserService {
             userId,
             updates,
             { new: true, runValidators: true }
-        );
+        ).select('-password');
 
         if (!user) {
-            throw new NotFoundError('사용자를 찾을 수 없습니다.');
+            throw new NotFoundError('User not found');
         }
 
         logger.info(`Profile updated for user: ${userId}`);
@@ -48,81 +55,65 @@ class UserService {
     /**
      * 비밀번호 변경
      */
-    async changePassword(userId, currentPassword, newPassword) {
+    async changePassword(userId, { currentPassword, newPassword }) {
         const user = await User.findById(userId).select('+password');
         if (!user) {
-            throw new NotFoundError('사용자를 찾을 수 없습니다.');
+            throw new NotFoundError('User not found');
         }
 
-        // 현재 비밀번호 확인
         const isPasswordValid = await user.comparePassword(currentPassword);
         if (!isPasswordValid) {
-            throw new AuthenticationError('현재 비밀번호가 일치하지 않습니다.');
+            throw new AuthenticationError('Current password is incorrect');
         }
 
-        // 새 비밀번호로 업데이트
         user.password = newPassword;
         await user.save();
 
-        // 다른 세션 로그아웃
+        // 다른 세션 모두 로그아웃
         await this.logoutOtherSessions(userId);
 
         logger.info(`Password changed for user: ${userId}`);
+        return { message: 'Password successfully changed' };
     }
 
     /**
-     * 프로필 이미지 업로드
+     * 다른 세션 로그아웃 (중복 로그인 방지)
      */
-    async updateProfileImageUrl(userId, imageUrl) {
-        const user = await User.findById(userId);
-        if (!user) {
-            throw new NotFoundError('사용자를 찾을 수 없습니다.');
-        }
-
-        user.profileImage = imageUrl;
-        await user.save();
-
-        logger.info(`Profile image URL updated for user: ${userId}`);
-        return user;
-    }
-
-    /**
-     * 활성 세션 조회
-     */
-    async getActiveSessions(userId) {
-        const sessions = await Session.getActiveSessions(userId);
-        return sessions.map(session => ({
-            id: session._id,
-            userAgent: session.userAgent,
-            clientIp: session.clientIp,
-            lastActivity: session.lastActivity,
-            createdAt: session.createdAt
-        }));
-    }
-
-    /**
-     * 다른 세션 로그아웃
-     */
-    async logoutOtherSessions(userId, currentSessionId) {
-        // 현재 세션을 제외한 모든 세션 무효화
+    async logoutOtherSessions(userId, currentSessionId = null) {
+        // DB에서 다른 세션들 무효화
         await Session.updateMany(
-            {
+            { 
                 userId,
                 _id: { $ne: currentSessionId },
                 isValid: true
             },
-            { isValid: false }
+            { 
+                $set: { isValid: false }
+            }
         );
 
-        // Redis에서 세션 정보 삭제
+        // Redis에서 다른 세션들의 캐시 삭제
         const sessionKeys = await redisClient.keys(`session:${userId}:*`);
         for (const key of sessionKeys) {
-            if (!key.includes(currentSessionId)) {
+            if (!currentSessionId || !key.includes(currentSessionId)) {
                 await redisClient.del(key);
             }
         }
 
-        logger.info(`Other sessions logged out for user: ${userId}`);
+        logger.info(`Logged out other sessions for user: ${userId}`);
+    }
+
+    /**
+     * 활성 세션 목록 조회
+     */
+    async getActiveSessions(userId) {
+        const sessions = await Session.find({
+            userId,
+            isValid: true,
+            expiresAt: { $gt: new Date() }
+        }).sort({ createdAt: -1 });
+
+        return sessions;
     }
 
     /**
@@ -131,28 +122,23 @@ class UserService {
     async deleteAccount(userId, password) {
         const user = await User.findById(userId).select('+password');
         if (!user) {
-            throw new NotFoundError('사용자를 찾을 수 없습니다.');
+            throw new NotFoundError('User not found');
         }
 
-        // 비밀번호 확인
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {
-            throw new AuthenticationError('비밀번호가 일치하지 않습니다.');
+            throw new AuthenticationError('Password is incorrect');
         }
 
         // 모든 세션 삭제
         await Session.deleteMany({ userId });
-
-        // Redis에서 모든 세션 정보 삭제
-        const sessionKeys = await redisClient.keys(`session:${userId}:*`);
-        for (const key of sessionKeys) {
-            await redisClient.del(key);
-        }
+        await redisClient.del(`user:${userId}`);
 
         // 사용자 삭제
-        await user.deleteOne();
+        await User.deleteOne({ _id: userId });
 
         logger.info(`Account deleted: ${userId}`);
+        return { message: 'Account successfully deleted' };
     }
 }
 

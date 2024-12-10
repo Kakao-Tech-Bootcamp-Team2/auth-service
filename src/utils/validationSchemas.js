@@ -18,12 +18,18 @@ const schemas = {
     updateProfileSchema: Joi.object({
         name: Joi.string().min(2).max(50),
         email: Joi.string().email()
-    }),
+    }).min(1),
 
     // 비밀번호 변경 스키마
     changePasswordSchema: Joi.object({
         currentPassword: Joi.string().required(),
-        newPassword: Joi.string().min(8).required()
+        newPassword: Joi.string()
+            .min(8)
+            .required()
+            .not(Joi.ref('currentPassword'))
+            .messages({
+                'any.invalid': 'New password must be different from current password'
+            })
     }),
 
     // 비밀번호 초기화 스키마
@@ -32,9 +38,8 @@ const schemas = {
         newPassword: Joi.string().min(8).required()
     }),
 
-    // 프로필 이미지 업데이트 스키마
-    updateProfileImageSchema: Joi.object({
-        imageUrl: Joi.string().uri().required()
+    deleteAccountSchema: Joi.object({
+        password: Joi.string().required()
     })
 };
 

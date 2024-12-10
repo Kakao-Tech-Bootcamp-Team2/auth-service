@@ -5,37 +5,29 @@ const authMiddleware = require('../middlewares/authMiddleware');
 const validator = require('../middlewares/validator');
 const schemas = require('../utils/validationSchemas');
 
-// 사용자 관련 라우트
-router.use(authMiddleware.verifyToken); // 모든 라우트에 인증 미들웨어 적용
+// 모든 라우트에 인증 미들웨어 적용
+router.use(authMiddleware.verifyToken);
 
+// 프로필 관리
+router.get('/profile', userController.getProfile);
 router.put(
     '/profile',
     validator.validateBody(schemas.updateProfileSchema),
     userController.updateProfile
 );
 
+// 비밀번호 변경
 router.put(
     '/password',
     validator.validateBody(schemas.changePasswordSchema),
     userController.changePassword
 );
 
-router.post(
-    '/profile-image',
-    validator.validateBody(schemas.updateProfileImageSchema),
-    userController.uploadProfileImage
-);
+// 세션 관리
+router.get('/sessions', userController.getActiveSessions);
+router.post('/logout-others', userController.logoutOtherSessions);
 
-router.get(
-    '/sessions',
-    userController.getActiveSessions
-);
-
-router.post(
-    '/logout-others',
-    userController.logoutOtherSessions
-);
-
+// 계정 삭제
 router.delete(
     '/',
     validator.validateBody(schemas.deleteAccountSchema),

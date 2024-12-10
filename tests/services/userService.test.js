@@ -1,81 +1,104 @@
 const userService = require('../../src/services/userService');
-const { User } = require('../../src/models');
-const { ValidationError, AuthenticationError } = require('../../src/utils/errors');
+const { User, Session } = require('../../src/models');
 const redisClient = require('../../src/utils/redisClient');
+const { ValidationError, NotFoundError, AuthenticationError } = require('../../src/utils/errors');
 
 describe('UserService', () => {
-  let testUser;
+    let testUser;
 
-  beforeEach(async () => {
-    testUser = await User.create({
-      email: 'test@example.com',
-      password: 'password123',
-      name: 'Test User'
-    });
-  });
+    beforeEach(async () => {
+        await User.deleteMany({});
+        await Session.deleteMany({});
+        jest.clearAllMocks();
 
-  describe('updateProfile', () => {
-    it('should update user profile successfully', async () => {
-      const updateData = {
-        name: 'Updated Name'
-      };
-
-      const updatedUser = await userService.updateProfile(testUser._id, updateData);
-      expect(updatedUser.name).toBe(updateData.name);
+        testUser = await User.create({
+            email: 'test@example.com',
+            password: 'password123',
+            name: 'Test User'
+        });
     });
 
-    it('should throw ValidationError for duplicate email', async () => {
-      await User.create({
-        email: 'other@example.com',
-        password: 'password123',
-        name: 'Other User'
-      });
+    describe('getProfile', () => {
+        it('should return user profile', async () => {
+            const profile = await userService.getProfile(testUser._id);
+            
+            expect(profile.email).toBe(testUser.email);
+            expect(profile.name).toBe(testUser.name);
+            expect(profile.password).toBeUndefined();
+        });
 
-      await expect(userService.updateProfile(testUser._id, {
-        email: 'other@example.com'
-      })).rejects.toThrow(ValidationError);
-    });
-  });
-
-  describe('changePassword', () => {
-    it('should change password successfully', async () => {
-      const currentPassword = 'password123';
-      const newPassword = 'newpassword123';
-
-      await userService.changePassword(testUser._id, currentPassword, newPassword);
-
-      const updatedUser = await User.findById(testUser._id).select('+password');
-      const isNewPasswordValid = await updatedUser.comparePassword(newPassword);
-      expect(isNewPasswordValid).toBe(true);
+        it('should throw NotFoundError for non-existent user', async () => {
+            const fakeId = '507f1f77bcf86cd799439011';
+            await expect(userService.getProfile(fakeId))
+                .rejects
+                .toThrow(NotFoundError);
+        });
     });
 
-    it('should throw AuthenticationError for wrong current password', async () => {
-      await expect(userService.changePassword(
-        testUser._id,
-        'wrongpassword',
-        'newpassword123'
-      )).rejects.toThrow(AuthenticationError);
-    });
-  });
+    describe('updateProfile', () => {
+        it('should update profile successfully', async () => {
+            const updateData = {
+                name: 'Updated Name',
+                email: 'updated@example.com'
+            };
 
-  describe('deleteAccount', () => {
-    it('should delete account successfully', async () => {
-      await userService.deleteAccount(testUser._id, 'password123');
-      
-      // 사용자가 실제로 삭제되었는지 확인
-      const deletedUser = await User.findById(testUser._id);
-      expect(deletedUser).toBeNull();
+            const updatedProfile = await userService.updateProfile(testUser._id, updateData);
+
+            expect(updatedProfile.name).toBe(updateData.name);
+            expect(updatedProfile.email).toBe(updateData.email);
+        });
+
+        it('should throw ValidationError for duplicate email', async () => {
+            await User.create({
+                email: 'other@example.com',
+                password: 'password123',
+                name: 'Other User'
+            });
+
+            await expect(userService.updateProfile(testUser._id, {
+                email: 'other@example.com'
+            })).rejects.toThrow(ValidationError);
+        });
     });
 
-    it('should throw AuthenticationError for wrong password', async () => {
-      await expect(userService.deleteAccount(
-        testUser._id,
-        'wrongpassword'
-      )).rejects.toThrow(AuthenticationError);
-      
-      // 사용자가 여전히 존재하는지 확인
-      const user = await User.findById(testUser._id);
-      expect(user).not.toBeNull();
+    describe('changePassword', () => {
+        it('should change password successfully', async () => {
+            const passwordData = {
+                currentPassword: 'password123',
+                newPassword: 'newpassword123'
+            };
+
+            await userService.changePassword(testUser._id, passwordData);
+
+            const updatedUser = await User.findById(testUser._id).select('+password');
+            const isNewPasswordValid = await updatedUser.comparePassword(passwordData.newPassword);
+            expect(isNewPasswordValid).toBe(true);
+        });
+
+        it('should throw AuthenticationError for wrong password', async () => {
+            const passwordData = {
+                currentPassword: 'wrongpassword',
+                newPassword: 'newpassword123'
+            };
+
+            await expect(userService.changePassword(testUser._id, passwordData))
+                .rejects
+                .toThrow(AuthenticationError);
+        });
     });
-  });
+
+    describe('deleteAccount', () => {
+        it('should delete account successfully', async () => {
+            await userService.deleteAccount(testUser._id, 'password123');
+            
+            const deletedUser = await User.findById(testUser._id);
+            expect(deletedUser).toBeNull();
+        });
+
+        it('should throw AuthenticationError for wrong password', async () => {
+            await expect(userService.deleteAccount(testUser._id, 'wrongpassword'))
+                .rejects
+                .toThrow(AuthenticationError);
+        });
+    });
 });
