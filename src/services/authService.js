@@ -18,48 +18,47 @@ class AuthService {
         try {
             const { email, password, name } = userData;
             
-            logger.debug('Registering new user:', { email, name });
-
-            const existingUser = await User.findOne({ email });
-            if (existingUser) {
-                throw new ValidationError('이미 등록된 이메일입니다.');
-            }
-
-            logger.debug('Creating user in database');
-            const user = await User.create({
+            // 단일 쿼리로 사용자 생성 (unique 인덱스로 중복 방지)
+            const user = new User({
                 email,
                 password,
                 name
             });
-            logger.debug('User created successfully:', { userId: user._id });
 
-            const accessToken = this.generateAccessToken(user);
-            const refreshToken = this.generateRefreshToken(user);
+            // 사용자 저장과 세션 생성을 병렬로 처리
+            const [savedUser, session] = await Promise.all([
+                user.save(),
+                Session.create({
+                    userId: user._id,
+                    userAgent: userData.userAgent || 'Unknown',
+                    clientIp: userData.clientIp || 'Unknown',
+                    expiresAt: new Date(Date.now() + config.jwt.refreshExpiresIn),
+                    isValid: true
+                })
+            ]);
 
-            const session = await Session.create({
-                userId: user._id,
-                userAgent: userData.userAgent || 'Unknown',
-                clientIp: userData.clientIp || 'Unknown',
-                expiresAt: new Date(Date.now() + config.jwt.refreshExpiresIn)
-            });
+            // 토큰 생성을 병렬로 처리
+            const [accessToken, refreshToken] = await Promise.all([
+                this.generateAccessToken(savedUser),
+                this.generateRefreshToken(savedUser)
+            ]);
 
-            logger.info(`New user registered: ${email}`);
             return {
                 user: {
-                    _id: user._id,
-                    email: user.email,
-                    name: user.name,
-                    profileImage: user.profileImage
+                    _id: savedUser._id,
+                    email: savedUser.email,
+                    name: savedUser.name,
+                    profileImage: savedUser.profileImage
                 },
                 accessToken,
                 refreshToken,
                 sessionId: session._id
             };
         } catch (error) {
-            logger.error('Error in register:', {
-                error: error.message,
-                stack: error.stack
-            });
+            // MongoDB 중복 키 에러 처리
+            if (error.code === 11000) {
+                throw new ValidationError('이미 등록된 이메일입니다.');
+            }
             throw error;
         }
     }
