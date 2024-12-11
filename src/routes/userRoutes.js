@@ -12,13 +12,6 @@ router.use(authMiddleware.verifyToken);
 router.get('/profile', userController.getProfile);
 router.put(
     '/profile',
-    validator.validateBody(schemas.updateProfileSchema),
-    userController.updateProfile
-);
-
-// 비밀번호 변경
-router.put(
-    '/password',
     validator.validateBody(schemas.changePasswordSchema),
     userController.changePassword
 );

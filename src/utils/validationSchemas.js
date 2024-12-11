@@ -22,13 +22,19 @@ const schemas = {
 
     // 비밀번호 변경 스키마
     changePasswordSchema: Joi.object({
-        currentPassword: Joi.string().required(),
-        newPassword: Joi.string()
-            .min(8)
+        currentPassword: Joi.string()
             .required()
-            .not(Joi.ref('currentPassword'))
+            .min(8)
             .messages({
-                'any.invalid': 'New password must be different from current password'
+                'string.empty': '현재 비밀번호를 입력해주세요.',
+                'string.min': '비밀번호는 최소 8자 이상이어야 합니다.'
+            }),
+        newPassword: Joi.string()
+            .required()
+            .min(8)
+            .messages({
+                'string.empty': '새 비밀번호를 입력해주세요.',
+                'string.min': '비밀번호는 최소 8자 이상이어야 합니다.'
             })
     }),
 

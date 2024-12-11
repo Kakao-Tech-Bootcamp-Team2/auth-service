@@ -55,25 +55,28 @@ class UserService {
     /**
      * 비밀번호 변경
      */
-    async changePassword(userId, { currentPassword, newPassword }) {
+    async changePassword(userId, currentPassword, newPassword) {
         const user = await User.findById(userId).select('+password');
         if (!user) {
-            throw new NotFoundError('User not found');
+            throw new NotFoundError('사용자를 찾을 수 없습니다.');
         }
 
+        // 현재 비밀번호 확인
         const isPasswordValid = await user.comparePassword(currentPassword);
         if (!isPasswordValid) {
-            throw new AuthenticationError('Current password is incorrect');
+            throw new ValidationError('현재 비밀번호가 일치하지 않습니다.');
         }
 
+        // 새 비밀번호가 현재 비밀번호와 같은지 확인
+        if (currentPassword === newPassword) {
+            throw new ValidationError('새 비밀번호는 현재 비밀번호와 달라야 합니다.');
+        }
+
+        // 비밀번호 변경
         user.password = newPassword;
         await user.save();
 
-        // 다른 세션 모두 로그아웃
-        await this.logoutOtherSessions(userId);
-
-        logger.info(`Password changed for user: ${userId}`);
-        return { message: 'Password successfully changed' };
+        return true;
     }
 
     /**

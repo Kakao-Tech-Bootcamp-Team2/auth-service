@@ -9,31 +9,31 @@ const schemas = require('../utils/validationSchemas');
 router.post(
     '/register',
     validator.validateBody(schemas.registerSchema),
-    authController.register.bind(authController)
+    authController.register
 );
 
 router.post(
     '/login',
     validator.validateBody(schemas.loginSchema),
-    authController.login.bind(authController)
+    authController.login
 );
 
 router.post(
     '/logout',
     authMiddleware.verifyToken,
-    authController.logout.bind(authController)
+    authController.logout
 );
 
 router.post(
     '/refresh-token',
     validator.validateBody(schemas.refreshTokenSchema),
-    authController.refreshToken.bind(authController)
+    authController.refreshToken
 );
 
 router.get(
     '/me',
     authMiddleware.verifyToken,
-    authController.getCurrentUser.bind(authController)
+    authController.getCurrentUser
 );
 
 module.exports = router;

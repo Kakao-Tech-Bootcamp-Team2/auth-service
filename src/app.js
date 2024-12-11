@@ -10,6 +10,12 @@ const config = require('./config');
 
 const app = express();
 
+// 요청 로깅 미들웨어
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.url}`);
+  next();
+});
+
 // 미들웨어 설정
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -34,15 +40,30 @@ app.get('/health', (req, res) => {
 app.use(errorHandler.handle.bind(errorHandler));
 
 // MongoDB 연결
-mongoose
-  .connect(config.mongodb.uri)
-  .then(() => {
-    logger.info('Connected to MongoDB');
-  })
-  .catch((error) => {
-    logger.error('MongoDB connection error:', error);
-    process.exit(1);
-  });
+const connectWithRetry = () => {
+  mongoose
+    .connect(config.mongodb.uri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    })
+    .then(() => {
+      logger.info(`Connected to MongoDB: ${config.mongodb.uri}`);
+      logger.info(`MongoDB connection state: ${mongoose.connection.readyState}`);
+    })
+    .catch((error) => {
+      logger.error('MongoDB connection error:', error);
+      logger.error('MongoDB connection details:', {
+        uri: config.mongodb.uri,
+        state: mongoose.connection.readyState
+      });
+      logger.info('Retrying MongoDB connection in 5 seconds...');
+      setTimeout(connectWithRetry, 5000);
+    });
+};
+
+connectWithRetry();
 
 // 서버 시작
 const server = app.listen(config.port, () => {

@@ -48,20 +48,21 @@ class UserController {
      */
     async changePassword(req, res, next) {
         try {
-            const userId = req.user.userId;
+            const { userId } = req.user;
             const { currentPassword, newPassword } = req.body;
-            
-            await userService.changePassword(userId, {
-                currentPassword,
-                newPassword
-            });
+
+            logger.info(`비밀번호 변경 시도: ${userId}`);
+
+            await userService.changePassword(userId, currentPassword, newPassword);
+
+            logger.info(`비밀번호 변경 성공: ${userId}`);
 
             res.status(StatusCodes.OK).json({
-                status: 'success',
-                message: 'Password successfully changed'
+                success: true,
+                message: '비밀번호가 성공적으로 변경되었습니다.'
             });
         } catch (error) {
-            logger.error('Error in changePassword:', error);
+            logger.error(`비밀번호 변경 실패: ${error.message}`);
             next(error);
         }
     }

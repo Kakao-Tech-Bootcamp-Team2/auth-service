@@ -15,36 +15,53 @@ class AuthService {
      * 회원가입
      */
     async register(userData) {
-        const { email, password, name } = userData;
+        try {
+            const { email, password, name } = userData;
+            
+            logger.debug('Registering new user:', { email, name });
 
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            throw new ValidationError('이미 등록된 이메일입니다.');
+            const existingUser = await User.findOne({ email });
+            if (existingUser) {
+                throw new ValidationError('이미 등록된 이메일입니다.');
+            }
+
+            logger.debug('Creating user in database');
+            const user = await User.create({
+                email,
+                password,
+                name
+            });
+            logger.debug('User created successfully:', { userId: user._id });
+
+            const accessToken = this.generateAccessToken(user);
+            const refreshToken = this.generateRefreshToken(user);
+
+            const session = await Session.create({
+                userId: user._id,
+                userAgent: userData.userAgent || 'Unknown',
+                clientIp: userData.clientIp || 'Unknown',
+                expiresAt: new Date(Date.now() + config.jwt.refreshExpiresIn)
+            });
+
+            logger.info(`New user registered: ${email}`);
+            return {
+                user: {
+                    _id: user._id,
+                    email: user.email,
+                    name: user.name,
+                    profileImage: user.profileImage
+                },
+                accessToken,
+                refreshToken,
+                sessionId: session._id
+            };
+        } catch (error) {
+            logger.error('Error in register:', {
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
         }
-
-        const user = await User.create({
-            email,
-            password,
-            name
-        });
-
-        const accessToken = this.generateAccessToken(user);
-        const refreshToken = this.generateRefreshToken(user);
-
-        const session = await Session.create({
-            userId: user._id,
-            userAgent: userData.userAgent || 'Unknown',
-            clientIp: userData.clientIp || 'Unknown',
-            expiresAt: new Date(Date.now() + config.jwt.refreshExpiresIn)
-        });
-
-        logger.info(`New user registered: ${email}`);
-        return {
-            user,
-            accessToken,
-            refreshToken,
-            sessionId: session._id
-        };
     }
 
     /**
@@ -99,11 +116,10 @@ class AuthService {
 
         return {
             user: {
-                id: user._id,
+                _id: user._id,
                 email: user.email,
                 name: user.name,
-                profileImage: user.profileImage,
-                role: user.role
+                profileImage: user.profileImage
             },
             accessToken,
             refreshToken,

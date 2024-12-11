@@ -23,15 +23,14 @@ class AuthController {
             logger.info(`회원가입 성공: ${email}`);
 
             res.status(StatusCodes.CREATED).json({
-                status: 'success',
-                data: {
-                    user: {
-                        id: result._id,
-                        email: result.email,
-                        name: result.name,
-                        profileImage: result.profileImage,
-                        role: result.role
-                    }
+                success: true,
+                token: result.accessToken,
+                sessionId: result.sessionId,
+                user: {
+                    _id: result.user._id,
+                    email: result.user.email,
+                    name: result.user.name,
+                    profileImage: result.user.profileImage
                 }
             });
         } catch (error) {
@@ -46,20 +45,8 @@ class AuthController {
      */
     async login(req, res, next) {
         try {
-            const { email, password } = req.body;
-            const userAgent = req.headers['user-agent'];
-            const clientIp = req.ip;
+            const result = await authService.login(req.body);
 
-            logger.info(`로그인 시도: ${email}`);
-
-            const result = await authService.login({
-                email,
-                password,
-                userAgent,
-                clientIp
-            });
-
-            // 세션 정보를 쿠키에 저장
             res.cookie('sessionId', result.sessionId, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
@@ -68,21 +55,15 @@ class AuthController {
                 maxAge: 24 * 60 * 60 * 1000
             });
 
-            logger.info(`로그인 성공: ${email}`);
-
             res.status(StatusCodes.OK).json({
-                status: 'success',
-                data: {
-                    accessToken: result.accessToken,
-                    refreshToken: result.refreshToken,
-                    sessionId: result.sessionId,
-                    user: {
-                        id: result.user._id,
-                        email: result.user.email,
-                        name: result.user.name,
-                        profileImage: result.user.profileImage,
-                        role: result.user.role
-                    }
+                success: true,
+                token: result.accessToken,
+                sessionId: result.sessionId,
+                user: {
+                    _id: result.user._id,
+                    email: result.user.email,
+                    name: result.user.name,
+                    profileImage: result.user.profileImage
                 }
             });
         } catch (error) {
@@ -147,7 +128,7 @@ class AuthController {
     }
 
     /**
-     * 현재 사용자 정보 조회
+     * 현재 사용 정보 조회
      * GET /api/v1/auth/me
      */
     async getCurrentUser(req, res, next) {
