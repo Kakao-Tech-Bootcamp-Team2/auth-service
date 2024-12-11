@@ -25,9 +25,15 @@ module.exports = {
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
   },
   
-  rabbitmq: {
-    url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
-    user: process.env.RABBITMQ_USER,
-    pass: process.env.RABBITMQ_PASS
+  frontend: {
+    url: process.env.FRONTEND_URL || 'http://localhost:3000',
+    cookieDomain: process.env.COOKIE_DOMAIN || 'localhost'
   },
+  
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    domain: process.env.COOKIE_DOMAIN || 'localhost',
+    maxAge: 24 * 60 * 60 * 1000 // 24시간
+  }
 };

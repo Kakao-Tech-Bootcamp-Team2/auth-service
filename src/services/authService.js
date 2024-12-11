@@ -17,77 +17,98 @@ class AuthService {
     async register(userData) {
         const { email, password, name } = userData;
 
-        // 이메일 중복 체크
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             throw new ValidationError('이미 등록된 이메일입니다.');
         }
 
-        // 사용자 생성
         const user = await User.create({
             email,
             password,
             name
         });
 
+        const accessToken = this.generateAccessToken(user);
+        const refreshToken = this.generateRefreshToken(user);
+
+        const session = await Session.create({
+            userId: user._id,
+            userAgent: userData.userAgent || 'Unknown',
+            clientIp: userData.clientIp || 'Unknown',
+            expiresAt: new Date(Date.now() + config.jwt.refreshExpiresIn)
+        });
+
         logger.info(`New user registered: ${email}`);
-        return user;
+        return {
+            user,
+            accessToken,
+            refreshToken,
+            sessionId: session._id
+        };
     }
 
     /**
      * 로그인
      */
-    async login({ email, password, userAgent, clientIp }) {
-        // 사용자 찾기 (비밀번호 필드 포함)
+    async login(loginData) {
+        const { email, password, userAgent, clientIp } = loginData;
+        
         const user = await User.findOne({ email }).select('+password');
         if (!user) {
             throw new AuthenticationError('이메일 또는 비밀번호가 잘못되었습니다.');
         }
 
-        // 비밀번호 확인
+        // 계정 잠금 확인
+        if (user.lockUntil && user.lockUntil > Date.now()) {
+            throw new AuthenticationError('계정이 일시적으로 잠겼습니다. 잠시 후 다시 시도해주세요.');
+        }
+
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {
+            await user.incLoginAttempts();
             throw new AuthenticationError('이메일 또는 비밀번호가 잘못되었습니다.');
         }
 
-        // 계정 상태 확인
-        if (user.status !== 'active') {
-            throw new AuthenticationError('계정이 활성화되지 않았습니다.');
-        }
-
-        // 토큰 생성
-        const accessToken = this.generateAccessToken(user);
-        const refreshToken = this.generateRefreshToken(user);
-
-        // 기존 세션 로그아웃 처리
-        await userService.logoutOtherSessions(user._id);
+        // 로그인 성공시 초기화
+        await user.resetLoginAttempts();
 
         // 세션 생성
         const session = await Session.create({
             userId: user._id,
-            token: refreshToken,
             userAgent,
             clientIp,
             expiresAt: new Date(Date.now() + config.jwt.refreshExpiresIn)
         });
 
-        // Redis에 세션 정보 저장
-        await redisClient.setex(
-            `session:${user._id}:${session._id}`,
-            config.jwt.refreshExpiresIn / 1000,
-            JSON.stringify({
-                sessionId: session._id,
-                userAgent,
-                clientIp
-            })
-        );
+        // 디바이스 정보 업데이트
+        await User.findByIdAndUpdate(user._id, {
+            $push: {
+                devices: {
+                    deviceId: session._id,
+                    userAgent,
+                    lastLogin: new Date(),
+                    isActive: true
+                }
+            },
+            lastActivity: new Date()
+        });
 
-        // 마지막 로그인 시간 업데이트
-        user.lastLogin = new Date();
-        await user.save();
+        // 토큰 생성
+        const accessToken = this.generateAccessToken(user);
+        const refreshToken = this.generateRefreshToken(user);
 
-        logger.info(`User logged in: ${email}`);
-        return { user, accessToken, refreshToken, sessionId: session._id };
+        return {
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name,
+                profileImage: user.profileImage,
+                role: user.role
+            },
+            accessToken,
+            refreshToken,
+            sessionId: session._id
+        };
     }
 
     /**

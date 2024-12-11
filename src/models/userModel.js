@@ -52,7 +52,34 @@ const userSchema = new mongoose.Schema({
     },
     passwordChangedAt: Date,
     passwordResetToken: String,
-    passwordResetExpires: Date
+    passwordResetExpires: Date,
+    lastActivity: {
+        type: Date,
+        default: Date.now
+    },
+    loginAttempts: {
+        type: Number,
+        default: 0
+    },
+    lockUntil: {
+        type: Date
+    },
+    devices: [{
+        deviceId: String,
+        userAgent: String,
+        lastLogin: Date,
+        isActive: Boolean
+    }],
+    settings: {
+        emailNotifications: {
+            type: Boolean,
+            default: true
+        },
+        twoFactorAuth: {
+            type: Boolean,
+            default: false
+        }
+    }
 }, {
     timestamps: true, // createdAt, updatedAt 자동 생성
     toJSON: { virtuals: true },
@@ -106,6 +133,32 @@ userSchema.methods.createPasswordResetToken = function() {
     this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10분
     
     return resetToken;
+};
+
+// 로그인 시도 관리를 위한 메서드 추가
+userSchema.methods.incLoginAttempts = async function() {
+    // 락이 걸려있고 아직 시간이 안지났다면
+    if (this.lockUntil && this.lockUntil > Date.now()) {
+        return;
+    }
+    
+    // 로그인 시도 횟수 증가
+    const updates = { $inc: { loginAttempts: 1 } };
+    
+    // 5회 이상 실패시 30분 락
+    if (this.loginAttempts + 1 >= 5) {
+        updates.$set = { lockUntil: Date.now() + 30 * 60 * 1000 };
+    }
+    
+    return this.updateOne(updates);
+};
+
+// 로그인 성공시 초기화
+userSchema.methods.resetLoginAttempts = function() {
+    return this.updateOne({
+        $set: { loginAttempts: 0 },
+        $unset: { lockUntil: 1 }
+    });
 };
 
 module.exports = mongoose.model('User', userSchema);

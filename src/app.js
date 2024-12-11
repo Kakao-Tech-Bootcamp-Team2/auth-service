@@ -11,14 +11,19 @@ const config = require('./config');
 const app = express();
 
 // 미들웨어 설정
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'x-session-id']
+}));
 app.use(helmet());
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 라우트 설정
-app.use('/api', routes);
+app.use('/api/v1', routes);
 
 // 헬스체크 엔드포인트
 app.get('/health', (req, res) => {

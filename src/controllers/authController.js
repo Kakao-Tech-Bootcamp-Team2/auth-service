@@ -26,9 +26,11 @@ class AuthController {
                 status: 'success',
                 data: {
                     user: {
-                        id: result.user._id,
-                        email: result.user.email,
-                        name: result.user.name
+                        id: result._id,
+                        email: result.email,
+                        name: result.name,
+                        profileImage: result.profileImage,
+                        role: result.role
                     }
                 }
             });
@@ -61,8 +63,9 @@ class AuthController {
             res.cookie('sessionId', result.sessionId, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                maxAge: 24 * 60 * 60 * 1000 // 24시간
+                sameSite: 'lax',
+                domain: process.env.COOKIE_DOMAIN,
+                maxAge: 24 * 60 * 60 * 1000
             });
 
             logger.info(`로그인 성공: ${email}`);
@@ -72,10 +75,13 @@ class AuthController {
                 data: {
                     accessToken: result.accessToken,
                     refreshToken: result.refreshToken,
+                    sessionId: result.sessionId,
                     user: {
                         id: result.user._id,
                         email: result.user.email,
-                        name: result.user.name
+                        name: result.user.name,
+                        profileImage: result.user.profileImage,
+                        role: result.user.role
                     }
                 }
             });
@@ -147,9 +153,7 @@ class AuthController {
     async getCurrentUser(req, res, next) {
         try {
             const { userId } = req.user;
-
             logger.info(`현재 사용자 정보 조회: ${userId}`);
-
             const user = await authService.getCurrentUser(userId);
 
             res.status(StatusCodes.OK).json({
@@ -159,7 +163,9 @@ class AuthController {
                         id: user._id,
                         email: user.email,
                         name: user.name,
-                        profileImage: user.profileImage
+                        profileImage: user.profileImage,
+                        role: user.role,
+                        lastActivity: user.lastActivity
                     }
                 }
             });

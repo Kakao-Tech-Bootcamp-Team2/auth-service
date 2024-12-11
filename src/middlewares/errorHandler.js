@@ -20,42 +20,32 @@ class ErrorHandler {
         if (err instanceof ValidationError) {
             return res.status(StatusCodes.BAD_REQUEST).json({
                 status: 'error',
-                error: {
-                    type: 'ValidationError',
-                    message: err.message
-                }
+                message: err.message,
+                code: err.code
             });
         }
 
         if (err instanceof AuthenticationError) {
             return res.status(StatusCodes.UNAUTHORIZED).json({
                 status: 'error',
-                error: {
-                    type: 'AuthenticationError',
-                    message: err.message
-                }
+                message: err.message,
+                code: err.code
             });
         }
 
         if (err instanceof NotFoundError) {
             return res.status(StatusCodes.NOT_FOUND).json({
                 status: 'error',
-                error: {
-                    type: 'NotFoundError',
-                    message: err.message
-                }
+                message: err.message,
+                code: err.code
             });
         }
 
         // 기본 에러 응답
         return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
             status: 'error',
-            error: {
-                type: 'InternalServerError',
-                message: process.env.NODE_ENV === 'production' 
-                    ? 'Internal server error' 
-                    : err.message
-            }
+            message: err.message,
+            code: err.code
         });
     }
 

@@ -6,10 +6,6 @@ const sessionSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
-    token: {
-        type: String,
-        required: true
-    },
     userAgent: {
         type: String,
         required: true
@@ -29,7 +25,22 @@ const sessionSchema = new mongoose.Schema({
     expiresAt: {
         type: Date,
         required: true
-    }
+    },
+    deviceInfo: {
+        browser: String,
+        os: String,
+        device: String
+    },
+    location: {
+        ip: String,
+        country: String,
+        city: String
+    },
+    loginHistory: [{
+        timestamp: Date,
+        action: String,
+        ip: String
+    }]
 }, {
     timestamps: true
 });
@@ -62,6 +73,17 @@ sessionSchema.statics.getActiveSessions = function(userId) {
         isValid: true,
         expiresAt: { $gt: Date.now() }
     }).sort({ lastActivity: -1 });
+};
+
+// 세션 활성화 여부 확인 메서드
+sessionSchema.methods.isActive = function() {
+    return this.isValid && this.expiresAt > new Date();
+};
+
+// 세션 연장 메서드
+sessionSchema.methods.extend = async function() {
+    this.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    return this.save();
 };
 
 module.exports = mongoose.model('Session', sessionSchema);
