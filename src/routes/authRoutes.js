@@ -1,39 +1,38 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const authController = require('../controllers/authController');
-const authMiddleware = require('../middlewares/authMiddleware');
-const validator = require('../middlewares/validator');
-const schemas = require('../utils/validationSchemas');
+const authController = require("../controllers/authController");
+const authMiddleware = require("../middlewares/authMiddleware");
+const validator = require("../middlewares/validator");
+const schemas = require("../utils/validationSchemas");
 
 // 인증 관련 라우트
 router.post(
-    '/register',
-    validator.validateBody(schemas.registerSchema),
-    authController.register
+  "/register",
+  validator.validateBody(schemas.registerSchema),
+  authController.register
 );
 
 router.post(
-    '/login',
-    validator.validateBody(schemas.loginSchema),
-    authController.login
+  "/login",
+  validator.validateBody(schemas.loginSchema),
+  authController.login
 );
+
+router.post("/logout", authMiddleware.verifyToken, authController.logout);
 
 router.post(
-    '/logout',
-    authMiddleware.verifyToken,
-    authController.logout
+  "/refresh-token",
+  validator.validateBody(schemas.refreshTokenSchema),
+  authController.refreshToken
 );
 
+router.get("/me", authMiddleware.verifyToken, authController.getCurrentUser);
+
+// 세션 검증 라우트 추가
 router.post(
-    '/refresh-token',
-    validator.validateBody(schemas.refreshTokenSchema),
-    authController.refreshToken
-);
-
-router.get(
-    '/me',
-    authMiddleware.verifyToken,
-    authController.getCurrentUser
+  "/validate-session",
+  authMiddleware.verifyToken,
+  authController.validateSession
 );
 
 module.exports = router;
