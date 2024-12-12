@@ -28,13 +28,13 @@ app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 라우트 설정
-app.use('/api/v1', routes);
-
 // 헬스체크 엔드포인트
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
+
+// 라우트 설정
+app.use('/api/v1', routes);
 
 // 에러 핸들러
 app.use(errorHandler.handle.bind(errorHandler));
