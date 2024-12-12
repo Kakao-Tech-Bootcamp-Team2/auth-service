@@ -9,46 +9,46 @@ class AuthMiddleware {
   // JWT 토큰 검증 미들웨어
   async verifyToken(req, res, next) {
     try {
-      const token = req.headers.authorization?.split(" ")[1];
+      const token =
+        req.headers.authorization?.split(" ")[1] || req.headers["x-auth-token"];
       const sessionId = req.headers["x-session-id"] || req.body.sessionId;
-      const userId = req.body.userId;
 
-      // 토큰이 있는 경우에만 검증
-      if (token) {
-        try {
-          const decoded = jwt.verify(token, config.jwt.secret);
-          req.user = {
-            userId: decoded.userId,
-            email: decoded.email,
-            role: decoded.role,
-            sessionId: sessionId,
-          };
-        } catch (error) {
-          if (error.name === "TokenExpiredError") {
-            next(new AuthenticationError("토큰이 만료되었습니다"));
-            return;
-          } else if (error.name === "JsonWebTokenError") {
-            next(new AuthenticationError("유효하지 않은 토큰입니다"));
-            return;
-          }
-          next(error);
-          return;
-        }
-      } else {
-        // 토큰이 없는 경우 body의 userId 사용
-        req.user = {
-          userId: userId,
-          sessionId: sessionId,
-        };
+      if (!token) {
+        throw new AuthenticationError("인증 토큰이 제공되지 않았습니다");
       }
 
-      next();
+      try {
+        const decoded = jwt.verify(token, config.jwt.secret);
+
+        // userId를 올바르게 설정
+        req.user = {
+          userId: decoded.userId || decoded.id, // id로도 확인
+          email: decoded.email,
+          role: decoded.role,
+          sessionId: sessionId,
+        };
+
+        logger.info(`토큰 검증 성공:`, {
+          userId: req.user.userId,
+          email: req.user.email,
+          sessionId: sessionId,
+        });
+
+        next();
+      } catch (error) {
+        if (error.name === "TokenExpiredError") {
+          next(new AuthenticationError("토큰이 만료되었습니다"));
+        } else if (error.name === "JsonWebTokenError") {
+          next(new AuthenticationError("유효하지 않은 토큰입니다"));
+        } else {
+          next(error);
+        }
+      }
     } catch (error) {
       logger.error("인증 미들웨어 오류:", {
         error: error.message,
         token: req.headers.authorization,
         sessionId: req.headers["x-session-id"] || req.body.sessionId,
-        userId: req.body.userId,
       });
       next(error);
     }
