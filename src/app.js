@@ -40,11 +40,10 @@ const connectWithRetry = () => {
     .connect(config.mongodb.uri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
       maxPoolSize: 100,
-      minPoolSize: 10,
-      compression: {
-        compressors: ['zlib']
-      }
+      minPoolSize: 10
     })
     .then(() => {
       logger.info(`Connected to MongoDB: ${config.mongodb.uri}`);
