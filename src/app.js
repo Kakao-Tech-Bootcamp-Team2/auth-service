@@ -28,9 +28,16 @@ app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 헬스 체크
-routes.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+// 헬스 체크 (root level)
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    success: true,
+    data: {
+      service: 'auth-service',
+      status: 'ok',
+      timestamp: new Date().toISOString()
+    }
+  });
 });
 
 // 라우트 설정
