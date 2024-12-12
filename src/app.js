@@ -40,13 +40,8 @@ const connectWithRetry = () => {
     .connect(config.mongodb.uri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
       maxPoolSize: 100,
       minPoolSize: 10,
-      connectTimeoutMS: 10000,
-      heartbeatFrequencyMS: 30000,
-      autoIndex: process.env.NODE_ENV !== 'production',
       compression: {
         compressors: ['zlib']
       }
