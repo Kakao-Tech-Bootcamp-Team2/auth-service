@@ -28,13 +28,20 @@ app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// 헬스 체크 (root level)
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    success: true,
+    data: {
+      service: 'auth-service',
+      status: 'ok',
+      timestamp: new Date().toISOString()
+    }
+  });
+});
+
 // 라우트 설정
 app.use('/api/v1', routes);
-
-// 헬스체크 엔드포인트
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
 
 // 에러 핸들러
 app.use(errorHandler.handle.bind(errorHandler));
@@ -47,6 +54,8 @@ const connectWithRetry = () => {
       useUnifiedTopology: true,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
+      maxPoolSize: 100,
+      minPoolSize: 10
     })
     .then(() => {
       logger.info(`Connected to MongoDB: ${config.mongodb.uri}`);
