@@ -28,6 +28,11 @@ app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// 헬스 체크
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // 라우트 설정
 app.use('/api/v1', routes);
 
