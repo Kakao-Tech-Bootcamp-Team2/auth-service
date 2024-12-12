@@ -42,6 +42,14 @@ const connectWithRetry = () => {
       useUnifiedTopology: true,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
+      maxPoolSize: 100,
+      minPoolSize: 10,
+      connectTimeoutMS: 10000,
+      heartbeatFrequencyMS: 30000,
+      autoIndex: process.env.NODE_ENV !== 'production',
+      compression: {
+        compressors: ['zlib']
+      }
     })
     .then(() => {
       logger.info(`Connected to MongoDB: ${config.mongodb.uri}`);
