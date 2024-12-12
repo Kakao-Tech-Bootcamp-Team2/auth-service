@@ -29,7 +29,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 헬스 체크
-router.get('/health', (req, res) => {
+routes.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
